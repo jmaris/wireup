@@ -87,7 +87,7 @@ case "$1" in
 				echo IP=${IP_RANGE}${CLIENT_IP}>$WIREUP_DIR/client.d/$3
 				echo PUBLIC_KEY=$4>>$WIREUP_DIR/client.d/$3
 				update_wg_conf
-				echo -e "\n${SERVER_NAME}\n[Interface]\nAddress = ${IP_RANGE}${CLIENT_IP}/24\nPrivateKey = PEERPRIVATEKEY\n\n[Peer]\nPublicKey = ${SERVER_PUBLIC_KEY}\nAllowedIPs = ${IP_RANGE}0/24\nEndpoint = ${SERVER_IP}:${PORT}"
+				echo -e "\n${SERVER_NAME}\n[Interface]\nAddress = ${IP_RANGE}${CLIENT_IP}/24\nPrivateKey = PEERPRIVATEKEY\n\n[Peer]\nPublicKey = ${SERVER_PUBLIC_KEY}\nAllowedIPs = ${IP_RANGE}0/24\nEndpoint = ${SERVER_IP}:${PORT}\nPersistentKeepalive = 25"
 			fi
 
 		;;
