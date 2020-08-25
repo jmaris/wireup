@@ -10,7 +10,7 @@ function update_wg_conf {
 	do
 		source $client
 		clientname=$(basename -- $client)
-		CB="${CB}\n[Peer]\n# ${clientname}\nPublicKey = ${PUBLIC_KEY}\nAllowedIPs = ${IP_RANGE}0/24\n\n"
+		CB="${CB}\n[Peer]\nPublicKey = ${PUBLIC_KEY}\nAllowedIPs = ${IP_RANGE}0/24\n\n"
 	done
 	shopt -u nullglob
 	systemctl stop wg-quick@${SERVER_NAME}
@@ -110,32 +110,19 @@ case "$1" in
 			CLIENT_PRIVATE_KEY=$(cat /tmp/wireup/privatekey)
 			rm /tmp/wireup/publickey
 			rm /tmp/wireup/privatekey
-			echo "Enter sudo password for server:"
-			read -s PASSWORD
+			echo "Enter sudo password for server:"; read -s PASSWORD
 			echo $PASSWORD | ssh -tt ${3} sudo -S wireup server client ${2} ${CLIENT_PUBLIC_KEY} > ${2}.conf
-			
 			ESCAPED_PRIVKEY=$(printf '%s\n' "$CLIENT_PRIVATE_KEY" | sed -e 's/[\/&]/\\&/g')
 			echo $ESCAPED_PRIVKEY
-			echo "======================"
+		
 			sed -i "s/PEERPRIVATEKEY/$ESCAPED_PRIVKEY/g" ${2}.conf
-			cat ${2}.conf
-			echo "========================"
 			sed -i -e 1d ${2}.conf ${2}.conf
-			cat ${2}.conf
-			echo "========================"
 			SERVER_NAME=$(head -n 1 ${2}.conf)
 			SERVER_NAME=$(echo $SERVER_NAME)
-			cat ${2}.conf
 			SERVER_NAME=`echo $SERVER_NAME| sed 's/\\r//g'`
-			# Something is going wrong with extration here i think
-			echo "========================"
 			cat ${2}.conf
-			echo "========================"
 			mv ${2}.conf ${2}-${SERVER_NAME}.conf
 			rm -rf /tmp/wireup
-
-
-			# Replace text in conifg file with private key
 		fi
 	;;
 	*)
