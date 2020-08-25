@@ -10,7 +10,7 @@ function update_wg_conf {
 	do
 		source $client
 		clientname=$(basename -- $client)
-		CB="${CB}\n[Peer]\nPublicKey = ${PUBLIC_KEY}\nAllowedIPs = ${IP_RANGE}0/24\n\n"
+		CB="${CB}\n[Peer]\nPublicKey = ${PUBLIC_KEY}\nAllowedIPs = ${IP}/32\n\n"
 	done
 	shopt -u nullglob
 	systemctl stop wg-quick@${SERVER_NAME}
