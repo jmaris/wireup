@@ -1,0 +1,149 @@
+#!/usr/bin/env bash
+WIREUP_DIR=/etc/wireup.d
+WIREGUARD_DIR=/etc/wireguard
+function update_wg_conf {
+	source $WIREUP_DIR/server.conf
+	# Generate New Server Config File
+	CB="[Interface]\nAddress = ${IP_RANGE}1/24\nListenPort = $PORT\nPrivateKey = $SERVER_PRIVATE_KEY\nSaveConfig = true\n"
+	shopt -s nullglob
+	for client in $WIREUP_DIR/client.d/*
+	do
+		source $client
+		clientname=$(basename -- $client)
+		CB="${CB}\n[Peer]\n# ${clientname}\nPublicKey = ${PUBLIC_KEY}\nAllowedIPs = ${IP_RANGE}0/24\n\n"
+	done
+	shopt -u nullglob
+	systemctl stop wg-quick@${SERVER_NAME}
+	echo -e $CB > $WIREGUARD_DIR/${SERVER_NAME}.conf
+	chmod 600 $WIREGUARD_DIR/${SERVER_NAME}.conf
+	systemctl start wg-quick@${SERVER_NAME}
+}
+
+case "$1" in
+    server)
+	case "$2" in
+		init)
+			if [ -z "$3" ] || [ -z "$4" ];
+			then
+				echo "Syntax: wireup server init external_ip interface_name ip_range listen_port"
+				echo "Example: wireup server init 51.52.53.54 wg0 10.0.0. 51820"
+			else
+				if [ "$(id -u)" -ne 0 ]; then
+						echo 'This script must be run by root' >&2
+						exit 1
+				fi
+				# Creates folders
+				mkdir -p $WIREUP_DIR
+				mkdir -p $WIREUP_DIR/client.d
+				# Generates Keypair
+				wg genkey | tee $WIREUP_DIR/privatekey | wg pubkey > $WIREUP_DIR/publickey
+				SERVER_PUBLIC_KEY=$(cat $WIREUP_DIR/publickey)
+				SERVER_PRIVATE_KEY=$(cat $WIREUP_DIR/privatekey)
+				rm $WIREUP_DIR/publickey
+				rm $WIREUP_DIR/privatekey
+				# Backs up old config file if needed
+				mv $WIREUP_DIR/server.conf $WIREUP_DIR/server.conf.backup 2>/dev/null;
+				# Creates a new one and adds config information
+				touch $WIREUP_DIR/server.conf
+				echo "SERVER_IP=$3">>$WIREUP_DIR/server.conf
+				echo "SERVER_NAME=$4">>$WIREUP_DIR/server.conf
+				if [ -z "$5" ];
+				then
+					echo "IP_RANGE=10.0.0.">>$WIREUP_DIR/server.conf
+				else
+					echo "IP_RANGE=$5">>$WIREUP_DIR/server.conf
+				fi
+				if [ -z "$6" ];
+				then
+					echo "PORT=51820">>$WIREUP_DIR/server.conf
+				else
+					echo "PORT=$6">>$WIREUP_DIR/server.conf
+				fi
+				echo "SERVER_PUBLIC_KEY=$SERVER_PUBLIC_KEY">>$WIREUP_DIR/server.conf
+				echo "SERVER_PRIVATE_KEY=$SERVER_PRIVATE_KEY">>$WIREUP_DIR/server.conf
+				echo "1"> $WIREUP_DIR/last_ip
+				chmod +x $WIREUP_DIR/server.conf
+				chmod 600 $WIREUP_DIR/server.conf
+				update_wg_conf
+				sudo systemctl enable wg-quick@${4}
+				sudo systemctl start wg-quick@${4}
+			fi
+		;;
+		client)
+			if [ -z "$3" ] || [ -z "$4" ];
+			then
+				echo "Syntax: wireguard server client name publickey"
+			else
+				if [ "$(id -u)" -ne 0 ]; then
+						echo 'This script must be run by root' >&2
+						exit 1
+				fi
+				source $WIREUP_DIR/server.conf
+				CLIENT_IP=$(<"$WIREUP_DIR/last_ip")
+				CLIENT_IP=$((CLIENT_IP+1))
+				# At some point i'll have to add something to prevent this going above 254 but tbh i'm too lazy to atm
+				echo $((CLIENT_IP)) > "$WIREUP_DIR/last_ip"
+
+				echo IP=${IP_RANGE}${CLIENT_IP}>$WIREUP_DIR/client.d/$3
+				echo PUBLIC_KEY=$4>>$WIREUP_DIR/client.d/$3
+				update_wg_conf
+				echo -e "\n${SERVER_NAME}\n[Interface]\nAddress = ${IP}/24\nPrivateKey = PEERPRIVATEKEY\n\n[Peer]\nPublicKey = ${SERVER_PUBLIC_KEY}\nAllowedIPs = ${IP_RANGE}0/24\nEndpoint = ${SERVER_IP}:${PORT}"
+			fi
+
+		;;
+		*)
+			echo "wireup: a quick wireguard configurer"
+			echo "wireup server init: set up the wireguard server"
+		;;
+		esac
+	;;
+    client)	
+		if [ -z "$2" ] || [ -z "$3" ];
+		then
+			echo "Syntax: wireup client client_name user@domain"
+			echo "client_name: the name you want to give to the client"
+			echo "user@domain: the ssh credentials of an account with sudo on the server."
+		else
+			mkdir /tmp/wireup/
+			wg genkey | tee /tmp/wireup/privatekey | wg pubkey > /tmp/wireup/publickey
+			CLIENT_PUBLIC_KEY=$(cat /tmp/wireup/publickey)
+			CLIENT_PRIVATE_KEY=$(cat /tmp/wireup/privatekey)
+			rm /tmp/wireup/publickey
+			rm /tmp/wireup/privatekey
+			echo "Enter sudo password for server:"
+			read -s PASSWORD
+			echo $PASSWORD | ssh -tt ${3} sudo -S wireup server client ${2} ${CLIENT_PUBLIC_KEY} > ${2}.conf
+			
+			ESCAPED_PRIVKEY=$(printf '%s\n' "$CLIENT_PRIVATE_KEY" | sed -e 's/[\/&]/\\&/g')
+			echo $ESCAPED_PRIVKEY
+			echo "======================"
+			sed -i "s/PEERPRIVATEKEY/$ESCAPED_PRIVKEY/g" ${2}.conf
+			cat ${2}.conf
+			echo "========================"
+			sed -i -e 1d ${2}.conf ${2}.conf
+			cat ${2}.conf
+			echo "========================"
+			SERVER_NAME=$(head -n 1 ${2}.conf)
+			SERVER_NAME=$(echo $SERVER_NAME)
+			cat ${2}.conf
+			SERVER_NAME=`echo $SERVER_NAME| sed 's/\\r//g'`
+			# Something is going wrong with extration here i think
+			echo "========================"
+			cat ${2}.conf
+			echo "========================"
+			mv ${2}.conf ${2}-${SERVER_NAME}.conf
+			rm -rf /tmp/wireup
+
+
+			# Replace text in conifg file with private key
+		fi
+	;;
+	*)
+		echo -e "wireup: a quick configuration layer for wireguard\n"
+		echo -e "Server Commands:\n"
+		echo -e "wireup server init:	Installs and configures server"
+		echo -e "wireup server adduser:	Adds a new client and returns a config (from the server)"
+		echo -e "wireup client clientname serveruser@server: Adds a new client to the server from client machine"
+	;;
+esac
+
