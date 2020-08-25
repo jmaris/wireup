@@ -10,12 +10,14 @@ Set up Wireguard networks with up to 253 clients automagically (dev was too lazy
 ```
 ssh youruser@51.52.53.54
 wget https://raw.githubusercontent.com/jmaris/wireup/master/wireup
+chmod +x wireup
 sudo mv wireup /usr/bin/wireup
 sudo wireup server init 51.52.53.54 vpn1 10.0.0. 51820
 ```
 - From any potential client, adds peer to the server and returns a client config ready for use:
 ```
-https://raw.githubusercontent.com/jmaris/wireup/master/wireup
+wget https://raw.githubusercontent.com/jmaris/wireup/master/wireup
+chmod +x wireup
 ./wireup client clientname youruser@51.52.53.53
 ```
 
