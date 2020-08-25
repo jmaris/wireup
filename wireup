@@ -4,7 +4,7 @@ WIREGUARD_DIR=/etc/wireguard
 function update_wg_conf {
 	source $WIREUP_DIR/server.conf
 	# Generate New Server Config File
-	CB="[Interface]\nAddress = ${IP_RANGE}1/24\nListenPort = $PORT\nPrivateKey = $SERVER_PRIVATE_KEY\nSaveConfig = true\n"
+	CB="[Interface]\nAddress = ${IP_RANGE}1/24\nListenPort = $PORT\nPrivateKey = $SERVER_PRIVATE_KEY\n"
 	shopt -s nullglob
 	for client in $WIREUP_DIR/client.d/*
 	do
